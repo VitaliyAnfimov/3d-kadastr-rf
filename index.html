@@ -1,52 +1,141 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3D Кадастр недвижимости РФ</title>
-<style>
-  body, html { margin: 0; height: 100%; overflow: hidden; background: #eef2f5; font-family: Arial, sans-serif; }
-  #info { position: absolute; top: 10px; left: 10px; color: #333; background: #fffcc0; padding: 10px; border-radius: 5px; max-width: 300px; }
-  canvas { display: block; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3D карта РФ - Выбор участков и расстояние</title>
+  <style>
+    body, html { margin: 0; height: 100%; overflow: hidden; font-family: Arial, sans-serif; }
+    #info {
+      position: absolute; top: 10px; left: 10px; padding: 15px; 
+      background: #fffcc0; border-radius: 5px; color: #333; 
+      max-width: 350px; box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    canvas { display: block; }
+    #distance { margin-top: 10px; font-weight: bold; }
+  </style>
 </head>
 <body>
-<div id="info">
-  Исследование возможности перехода РФ к 3D-модели кадастра недвижимости<br><br>
-  Вращающийся пример 3D объекта с помощью Three.js
-</div>
-<script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
-<script>
-  let scene = new THREE.Scene();
-  let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  <div id="info">
+    <h3>3D карта РФ - Выбор участков</h3>
+    <p>Кликните по двум участкам на карте, чтобы узнать расстояние между ними.</p>
+    <div id="distance">Расстояние: —</div>
+  </div>
 
-  let renderer = new THREE.WebGLRenderer({antialias: true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/examples/js/controls/OrbitControls.min.js"></script>
 
-  // Куб (пример 3D объекта)
-  let geometry = new THREE.BoxGeometry(2, 2, 2);
-  let material = new THREE.MeshNormalMaterial();
-  let cube = new THREE.Mesh(geometry, material);
-  scene.add(cube);
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 50, 100);
 
-  camera.position.z = 5;
-
-  function animate() {
-    requestAnimationFrame(animate);
-
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
-
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
+    const renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-</script>
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    // Свет
+    const ambientLight = new THREE.AmbientLight(0x888888);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(50, 100, 50);
+    scene.add(dirLight);
+
+    // Плоская карта (упрощённая прямоугольная форма)
+    const mapGeometry = new THREE.PlaneGeometry(100, 70);
+    const mapMaterial = new THREE.MeshStandardMaterial({color: 0x66cc66, side: THREE.DoubleSide});
+    const mapMesh = new THREE.Mesh(mapGeometry, mapMaterial);
+    mapMesh.rotation.x = -Math.PI / 2;
+    scene.add(mapMesh);
+
+    // Точки-участки (условные координаты на карте)
+    const lotPositions = [
+      {name: "Москва", pos: new THREE.Vector3(-20, 1, 10)},
+      {name: "Санкт-Петербург", pos: new THREE.Vector3(-30, 1, 25)},
+      {name: "Новосибирск", pos: new THREE.Vector3(20, 1, -10)},
+      {name: "Владивосток", pos: new THREE.Vector3(45, 1, -25)},
+      {name: "Калининград", pos: new THREE.Vector3(-45, 1, 30)},
+      {name: "Ямало-Ненецкий автономный округ", pos: new THREE.Vector3(5, 1, 40)}, // Новые территории условно
+    ];
+
+    const lotMeshes = [];
+    const lotMaterial = new THREE.MeshStandardMaterial({color: 0x0077ff});
+    const lotHoverMaterial = new THREE.MeshStandardMaterial({color: 0xffaa00});
+    const lotSelectedMaterial = new THREE.MeshStandardMaterial({color: 0xff4444});
+
+    lotPositions.forEach(lot => {
+      const sphereGeom = new THREE.SphereGeometry(1.5, 16, 16);
+      const mesh = new THREE.Mesh(sphereGeom, lotMaterial.clone());
+      mesh.position.copy(lot.pos);
+      mesh.userData = { name: lot.name };
+      scene.add(mesh);
+      lotMeshes.push(mesh);
+    });
+
+    // Выбранные участки
+    const selectedLots = [];
+
+    // Рейкастер для выбора мышью
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const distanceDiv = document.getElementById('distance');
+
+    function calculateDistance(lot1, lot2) {
+      // Возвращаем расстояние в метрах, предположим что 1 ед. на карте = 10 км
+      const dist = lot1.position.distanceTo(lot2.position);
+      return dist * 10000; // переводим в метры
+    }
+
+    function onClick(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(lotMeshes);
+
+      if(intersects.length > 0) {
+        const clicked = intersects[0].object;
+
+        // Если выбрано 2 точки — сбрасываем выбор
+        if(selectedLots.length === 2) {
+          selectedLots.forEach(lot => lot.material = lotMaterial);
+          selectedLots.length = 0;
+          distanceDiv.textContent = "Расстояние: —";
+        }
+
+        // Если уже есть выбранная точка, сбрасываем её цвет
+        if(selectedLots.includes(clicked) === false) {
+          selectedLots.push(clicked);
+          clicked.material = lotSelectedMaterial;
+        }
+
+        if(selectedLots.length === 2) {
+          const dist = calculateDistance(selectedLots[0], selectedLots[1]);
+          distanceDiv.textContent = `Расстояние между "${selectedLots[0].userData.name}" и "${selectedLots[1].userData.name}": ${dist.toFixed(0)} м`;
+        }
+      }
+    }
+
+    window.addEventListener('click', onClick);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </body>
 </html>
