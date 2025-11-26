@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Кадастр недвижимости РФ</title>
+<style>
+  body, html { margin: 0; height: 100%; overflow: hidden; background: #eef2f5; font-family: Arial, sans-serif; }
+  #info { position: absolute; top: 10px; left: 10px; color: #333; background: #fffcc0; padding: 10px; border-radius: 5px; max-width: 300px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="info">
+  Исследование возможности перехода РФ к 3D-модели кадастра недвижимости<br><br>
+  Вращающийся пример 3D объекта с помощью Three.js
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+<script>
+  let scene = new THREE.Scene();
+  let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+  let renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // Куб (пример 3D объекта)
+  let geometry = new THREE.BoxGeometry(2, 2, 2);
+  let material = new THREE.MeshNormalMaterial();
+  let cube = new THREE.Mesh(geometry, material);
+  scene.add(cube);
+
+  camera.position.z = 5;
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    cube.rotation.x += 0.01;
+    cube.rotation.y += 0.01;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+</body>
+</html>
